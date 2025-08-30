@@ -12,10 +12,15 @@ import { UserAnswer } from "@/utils/schema";
 import { useUser } from "@clerk/nextjs";
 import moment from "moment";
 
-function RecordAnswerSection({ activeQuestionIndex, mockInterViewQuestion,interviewData }) {
+function RecordAnswerSection({
+  activeQuestionIndex,
+  mockInterViewQuestion,
+  interviewData,
+}) {
   const [userAnswer, setUserAnswer] = useState("");
-  const [loading,setLoading]=useState(false)
-  const {user}=useUser()
+  const [loading, setLoading] = useState(false);
+  const { user } = useUser();
+
   const {
     error,
     interimResult,
@@ -23,11 +28,12 @@ function RecordAnswerSection({ activeQuestionIndex, mockInterViewQuestion,interv
     results,
     startSpeechToText,
     stopSpeechToText,
-    setResults
+    setResults,
   } = useSpeechToText({
     continuous: true,
     useLegacyResults: false,
   });
+
   if (error) {
     toast(error);
     return;
@@ -40,75 +46,67 @@ function RecordAnswerSection({ activeQuestionIndex, mockInterViewQuestion,interv
   }, [results]);
 
   const StartStopRecording = async () => {
-
     if (isRecording) {
-      
-
       stopSpeechToText();
-      
-     
-
-     
     } else {
       startSpeechToText();
     }
   };
 
-  useEffect(()=>{
-    if(!isRecording&&userAnswer.length>10){
+  useEffect(() => {
+    if (!isRecording && userAnswer.length > 10) {
       UpdateUserAnswerInDb();
     }
-    // if (userAnswer?.length < 10) {
-    //   setLoading(false)
-    //   toast("Error while saving your answer, Please record again");
-    //   return;
-    // }
+  }, [userAnswer]);
 
-  },[userAnswer])
+  const UpdateUserAnswerInDb = async () => {
+    try {
+      console.log("Saving user answer:", userAnswer);
+      setLoading(true);
 
-  const UpdateUserAnswerInDb=async()=>{
-    console.log(userAnswer)
-    setLoading(true);
-    const feedbackPromt = `Question: ${mockInterViewQuestion[activeQuestionIndex]?.question}, User Answer: ${userAnswer}. Based on the question and the user's answer, please provide a rating 1 to 10 for the answer and feedback in the form of areas for improvement, if any. The feedback should in JSON format only nothing else field should be rating and feeback only, in just 3 to 5 lines.`;
-    const result = await chatSession.sendMessage(feedbackPromt);
-    const mockJsonResp = result.response
-      .text()
-      .replace("```json", "")
-      .replace("```", "");
+      const feedbackPromt = `Question: ${
+        mockInterViewQuestion?.questions[activeQuestionIndex]?.question
+      }, User Answer: ${userAnswer}. Based on the question and the user's answer, please provide a rating 1 to 10 for the answer and feedback in the form of areas for improvement, if any. The feedback should be JSON only with fields "rating" and "feedback". Keep feedback 3 to 5 lines.`;
 
-    const JsonFeedbackResp=JSON.parse(mockJsonResp)
-    const resp=await db.insert(UserAnswer).values({
-      mockIdRef: interviewData?.mockId,
-      question:mockInterViewQuestion[activeQuestionIndex]?.question,
-      correctAns:mockInterViewQuestion[activeQuestionIndex]?.answer,
-      userAns:userAnswer,
-      feedback:JsonFeedbackResp?.feedback,
-      rating:JsonFeedbackResp?.rating,
-      userEmail:user?.primaryEmailAddress?.emailAddress,
-      createdAt:moment().format('DD-MM-yyyy')
+      const result = await chatSession.sendMessage(feedbackPromt);
+      const mockJsonResp = result.response
+        .text()
+        .replace("```json", "")
+        .replace("```", "");
 
+      const JsonFeedbackResp = JSON.parse(mockJsonResp);
 
-    })
-    
-    if(resp){
+      const resp = await db.insert(UserAnswer).values({
+        mockIdRef: interviewData?.mockId,
+        question:
+          mockInterViewQuestion?.questions[activeQuestionIndex]?.question,
+        correctAns:
+          mockInterViewQuestion?.questions[activeQuestionIndex]?.answer,
+        userAns: userAnswer,
+        feedback: JsonFeedbackResp?.feedback,
+        rating: JsonFeedbackResp?.rating,
+        userEmail: user?.primaryEmailAddress?.emailAddress,
+        createdAt: moment().format("DD-MM-yyyy"),
+      });
 
-      toast('User Answer recorder successfully!')
-      setUserAnswer('')
-      setResults([])
+      if (resp) {
+        toast("User Answer recorded successfully!");
+        setUserAnswer("");
+        setResults([]);
+      }
+    } catch (err) {
+      console.error("Error saving answer:", err);
+      toast("Failed to save your answer. Please try again.");
+    } finally {
+      setLoading(false);
+      setResults([]);
     }
-    setResults([])
-    setLoading(false)
-  }
+  };
 
   return (
     <div className="flex items-center justify-center flex-col">
       <div className="flex flex-col mt-20 justify-center items-center bg-black rounded-lg p-5">
-        <Image
-          src={"/webcam.png"}
-          width={200}
-          height={200}
-          className="absolute"
-        />
+        <Image src={"/webcam.png"} width={200} height={200} className="absolute" />
         <Webcam
           mirrored={true}
           style={{
@@ -118,7 +116,12 @@ function RecordAnswerSection({ activeQuestionIndex, mockInterViewQuestion,interv
           }}
         />
       </div>
-      <Button  disabled={loading} variant="outline" onClick={StartStopRecording} className="my-10">
+      <Button
+        disabled={loading}
+        variant="outline"
+        onClick={StartStopRecording}
+        className="my-10"
+      >
         {isRecording ? (
           <h2 className="flex items-center justify-center text-red-600 gap-2">
             <StopCircle />
